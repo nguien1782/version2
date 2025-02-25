@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Chart</title>
+    <style>
+        .highcharts-figure .chart-container {
+            width: 300px;
+            height: 200px;
+            float: left;
+        }
+
+        .highcharts-figure,
+        .highcharts-data-table table {
+            width: 600px;
+            margin: 0 auto;
+        }
+
+        .highcharts-data-table table {
+            font-family: Verdana, sans-serif;
+            border-collapse: collapse;
+            border: 1px solid #ebebeb;
+            margin: 10px auto;
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .highcharts-data-table caption {
+            padding: 1em 0;
+            font-size: 1.2em;
+            color: #555;
+        }
+
+        .highcharts-data-table th {
+            font-weight: 600;
+            padding: 0.5em;
+        }
+
+        .highcharts-data-table td,
+        .highcharts-data-table th,
+        .highcharts-data-table caption {
+            padding: 0.5em;
+        }
+
+        .highcharts-data-table thead tr,
+        .highcharts-data-table tr:nth-child(even) {
+            background: #f8f8f8;
+        }
+
+        .highcharts-data-table tr:hover {
+            background: #f1f7ff;
+        }
+
+        @media (max-width: 600px) {
+            .highcharts-figure,
+            .highcharts-data-table table {
+                width: 100%;
+            }
+
+            .highcharts-figure .chart-container {
+                width: 300px;
+                float: none;
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script src="https://www.unpkg.com/@eohjsc/era-widget@1.0.14/src/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <figure class="highcharts-figure">
+        <div id="container-energy" class="chart-container"></div>
+        <div id="container-water" class="chart-container"></div>
+        <p class="highcharts-description">
+            Biểu đồ hiển thị điện năng và mức nước.
+        </p>
+        <button id="exportButton">
+            Xuất ra Excel
+        </button>
+    </figure>
+    <input type="checkbox" id="V3">
+    <input type="checkbox" id="V6">
+    <script>
+        const eraWidget = new EraWidget();
+        let config = null;
+        let dataBuffer = [];
+        let excelBuffer = [];
+
+        eraWidget.onConfiguration((configuration) => {
+            config = configuration.realtime_configs.reduce((acc, curr) => {
+                acc[curr.name] = curr.id;
+                return acc;
+            }, {});
+        });
+
+        eraWidget.onValues((values) => {
+            const energyInput = document.getElementById('V3');
+            const waterInput = document.getElementById('V6');
+            if (config) {
+                const energyValue = values[config['V3']] ? values[config['V3']].value : 0;
+                const waterValue = values[config['V6']] ? values[config['V6']].value : 0;
+
+                energyInput.checked = energyValue > 0;
+                waterInput.checked = waterValue > 0;
+
+                const energyChart = Highcharts.charts[0];
+                const waterChart = Highcharts.charts[1];
+
+                if (energyChart) {
+                    const energyPoint = energyChart.series[0].points[0];
+                    energyPoint.update(energyValue);
+                    if (energyValue > energyChart.yAxis[0].max) {
+                        energyChart.yAxis[0].update({ max: Math.ceil(energyValue + 50) });
+                    }
+                    dataBuffer.push([Date.now(), energyValue, waterValue]);
+                    excelBuffer.push({ Time: new Date().toLocaleString(), Energy: energyValue, Water: waterValue });
+                }
+
+                if (waterChart) {
+                    const waterPoint = waterChart.series[0].points[0];
+                    waterPoint.update(waterValue);
+                    if (waterValue > waterChart.yAxis[0].max) {
+                        waterChart.yAxis[0].update({ max: Math.ceil(waterValue + 100) });
+                    }
+                }
+            }
+        });
+
+        eraWidget.ready();
+
+        document.getElementById('exportButton').addEventListener('click', function () {
+            if (excelBuffer.length === 0) {
+                alert("Không có dữ liệu để xuất!");
+                return;
+            }
+
+            const ws = XLSX.utils.json_to_sheet(excelBuffer);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Dữ liệu cảm biến');
+            XLSX.writeFile(wb, 'du_lieu_cam_bien.xlsx');
+        });
+    </script>
+</body>
+</html>
